@@ -1,0 +1,15 @@
+# 编译输出
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.a
+bin/
+obj/
+build/
+output/
+
+# 编辑器配置
+.idea/
+*.swp

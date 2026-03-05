@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "GDB (Native Debug)",
+      "type": "gdb",
+      "request": "launch",
+
+      "target": "${workspaceFolder}/output/main.exe",
+      "cwd": "${workspaceFolder}",
+
+      "gdbpath": "C:/x86_64-15.2.0-release-posix-seh-ucrt-rt_v13-rev0/mingw64/bin/gdb.exe",
+      "externalConsole": true,
+
+      "preLaunchTask": "build",
+
+      // 关键：把 MinGW 的 bin 放进调试会话的 PATH，避免 0xC0000135 缺 DLL
+      "env": {
+        "PATH": "C:/x86_64-15.2.0-release-posix-seh-ucrt-rt_v13-rev0/mingw64/bin;${env:PATH}"
+      }
+    }
+  ]
+}
