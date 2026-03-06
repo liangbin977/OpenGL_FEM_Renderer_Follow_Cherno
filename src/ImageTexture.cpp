@@ -15,8 +15,8 @@ ImageTexture::ImageTexture(){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); 
 
     // 【关键点 3】分配显存 (NULL 表示只分配不传数据)
-    // 确保 512x512 与 DispatchCompute 的参数对应
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 512, 512, 0, GL_RGBA, GL_FLOAT, NULL);
+    // 确保 1024x1024 与 DispatchCompute 的参数对应
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1024, 1024, 0, GL_RGBA, GL_FLOAT, NULL);
 
     
     glBindTexture(GL_TEXTURE_2D, 0); // 解绑是个好习惯
@@ -31,8 +31,8 @@ void ImageTexture::Bind(unsigned int slot) const {
 void ImageTexture::Unbind() const {
     glBindTexture(GL_TEXTURE_2D, 0);
 }
-void ImageTexture::BindImage(unsigned int slot) const {
-    glBindImageTexture(slot, m_RendererID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+void ImageTexture::BindImage(unsigned int slot, GLenum access, GLenum format) const {
+    glBindImageTexture(slot, m_RendererID, 0, GL_FALSE, 0, access, format);
 }
 unsigned int ImageTexture::GetId() const {
     return m_RendererID;

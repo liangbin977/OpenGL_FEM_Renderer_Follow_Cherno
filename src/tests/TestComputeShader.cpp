@@ -4,6 +4,7 @@
 #include "../Renderer.h"
 #include "../vendor/imgui/imgui.h"
 #include <iostream>
+#include <vector>
 #include "../vendor/glm/glm.hpp"
 #include "../vendor/glm/gtc/matrix_transform.hpp"
 #include "../vendor/imgui/imgui_impl_glfw.h"
@@ -11,7 +12,7 @@
 
 namespace test {
     ImageTexture2D::ImageTexture2D()
-        :m_TranslationA(0, 0, 0), m_TranslationB(0.5f, 0.5f, 0), m_Proj(glm::ortho(-2.0f, 2.0f, -1.5f, 1.5f, -1.0f, 1.0f)), m_View(glm::translate(glm::mat4(1.0f), glm::vec3(0.1, 0, 0)))
+        :m_TranslationA(0.0f, 0.0f, 0.0f),m_Proj(glm::ortho(-2.0f, 2.0f, -1.5f, 1.5f, -1.0f, 1.0f)), m_View(glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0)))
     {
         float positionsp[] = {
             -0.5f, -0.5f, 0, 0,//0
@@ -45,111 +46,144 @@ namespace test {
         m_Shader = std::make_unique<Shader>("res/shaders/Basic.shader");
         //需要与vertex和fragment shader分开定义
         m_ComputeShader = std::make_unique<Shader>("res/shaders/Compute.shader");
-
-        m_ImageTexture = std::make_unique<ImageTexture>();
+        //创建两葛一摸一样的纹理对象，分别作为输入和输出
+        m_ImageTextureIn = std::make_unique<ImageTexture>();
+        m_ImageTextureOut = std::make_unique<ImageTexture>();
     };
     ImageTexture2D::~ImageTexture2D(){};
-    void ImageTexture2D::OnUpdate(float deltaTime){}
+    void ImageTexture2D::OnUpdate(float deltaTime){
+
+    }
+    // 【添加全局静态变量作为信号通信】
+    static bool s_ShouldClearWaves = false;
     void ImageTexture2D::OnRender(){
- // 1. 清屏
-    GLCall(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
-    GLCall(glClear(GL_COLOR_BUFFER_BIT));
+        // 1. 清屏
+        GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.0f));
+        GLCall(glClear(GL_COLOR_BUFFER_BIT));
 
-    // ====================================================
-    // 阶段一：计算 (Compute Shader)
-    // ====================================================
-    {
-        // 1. 必须先绑定 Shader，才能设置它的 Uniform
-        m_ComputeShader->Bind();
-        
-        // 2. 绑定图像单元 (用于写入)
-        m_ImageTexture->BindImage(0);
+        if(s_ShouldClearWaves){
+             // 1. 在 CPU 内存里准备一块全 0 的黑布 (注意尺寸要匹配你的 1024x1024)
+             //四个通道，每个通道一个 float，总共 4 个 float 代表 RGBA
+            // 使用 std::vector 自动管理内存，避免 new 忘记 delete 导致内存泄漏
+            std::vector<float> emptyPixels(1024 * 1024 * 4, 0.0f); 
 
-        // 3. 传参 & 调度
-        m_ComputeShader->SetUniform1f("u_Time", (float)glfwGetTime()); 
-        glDispatchCompute(512/8, 512/8, 1); // 确保覆盖全图
+            // 2. 将黑布盖到输入纹理上 (清零)
+            m_ImageTextureIn->Bind(0); // 绑定到 0 号槽
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1024, 1024, GL_RGBA, GL_FLOAT, emptyPixels.data());
 
-        // 4.哪怕是同一帧内读写，也要加屏障
-        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-    }    
-    {
-        // 绑定纹理
-        glBindTexture(GL_TEXTURE_2D, m_ImageTexture->GetId());
-        
-        // 准备一个 buffer 接数据
-        float* pixels = new float[512 * 512 * 4];
-        
-        // 从显存把纹理读回来 (这一步非常暴力，会卡顿，但为了调试值得)
-        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixels);
-        
-        // 检查中心点像素 (256, 256)
-        int index = (256 * 512 + 256) * 4;
-        float r = pixels[index + 0];
-        float g = pixels[index + 1];
-        float b = pixels[index + 2];
-        float a = pixels[index + 3];
-        
-        // 打印颜色值 (只打印一次，防止刷屏)
-        static bool s_Logged = false;
-        if (!s_Logged) {
-            std::cout << ">>> GPU Texture Center Pixel: (" 
-                      << r << ", " << g << ", " << b << ", " << a << ")" << std::endl;
-            s_Logged = true;
+            // 3. 将黑布盖到输出纹理上 (清零)
+            m_ImageTextureOut->Bind(1); // 绑定到 1 号槽
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1024, 1024, GL_RGBA, GL_FLOAT, emptyPixels.data());
+
+            // 4. 洗把手，解绑
+            m_ImageTextureIn->Unbind();
+            m_ImageTextureOut->Unbind();
+
+            // 关键：等待清空操作彻底完成
+            glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);   
+            s_ShouldClearWaves = false; // 全局信号重置 
         }
 
-        delete[] pixels;
-    }
+        ImGuiIO& io = ImGui::GetIO();
+        GLCall(glViewport(0,0, io.DisplaySize.x, io.DisplaySize.y)); // 确保视口覆盖整个窗口
 
-    // ====================================================
-    // 阶段二：显示 (Graphic Shader)
-    // ====================================================
-    {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        Renderer renderer;
-        // 【重点修复】必须先绑定图形 Shader，后续的 SetUniform 才有效！
-        m_Shader->Bind();
-
-        // 1. 绑定纹理
-        m_ImageTexture->Bind(0);            // 绑定到 0 号槽
-        m_Shader->SetUniform1i("u_Texture", 0); // 告诉 Shader 读 0 号槽
-
-        // 2. 绘制物体 A (响应 ImGui m_TranslationA)
+        // ====================================================
+        // 阶段一：计算 (Compute Shader)
+        // ====================================================
         {
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), m_TranslationA);
-            glm::mat4 mvp = m_Proj * m_View * model; 
+            // 1. 必须先绑定 Shader，才能设置它的 Uniform
+            m_ComputeShader->Bind();
+            bool mousePressed = io.MouseDown[0] && !io.WantCaptureMouse; // 只有当 ImGui 没有捕获鼠标时才认为是有效的点击
+            float posX = io.MouseClickedPos[0].x / io.DisplaySize.x; // 归一化到 0-1 范围
+            float posY = 1.0f - io.MouseClickedPos[0].y / io.DisplaySize.y; // 归一化到 0-1 范围
             
-            // 因为上面已经调用了 m_Shader->Bind()，这里设置矩阵才会生效
-            m_Shader->SetUniformMat4f("u_MVP", mvp);
+            // 2. 绑定图像单元 (用于写入)
+            m_ImageTextureIn->BindImage(0, GL_READ_ONLY, GL_RGBA32F); // 绑定到 0 号图像单元，读取权限，格式 RGBA32F
+            m_ImageTextureOut->BindImage(1, GL_WRITE_ONLY, GL_RGBA32F); // 绑定到 1 号图像单元，写入权限，格式 RGBA32F
+            //传参：可以通过 Uniform 传递一些额外参数给 Compute Shader，比如时间、鼠标位置等 cpu->gpu
+            m_ComputeShader->SetUniform2f("U_MousePos", posX, posY); // 传递鼠标位置给 Compute Shader
+            m_ComputeShader->SetUniformBool("U_MousePressed", mousePressed); // 传递鼠标按下状态给 Compute Shader
+            //核心：输出纹理的计算每一帧都是完全覆盖上一帧的，所以上一帧的垃圾数据不会对下一帧造成影响，所以不需要担心读写冲突问题。
+            glDispatchCompute(1024/8, 1024/8, 1); // 确保覆盖全图
+
+            // 4.哪怕是同一帧内读写，也要加屏障
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        }    
+        {
+            // 绑定纹理
+            glBindTexture(GL_TEXTURE_2D, m_ImageTextureIn->GetId());
             
-            // Draw 内部通常会再次 Bind Shader，这也是安全的
-            renderer.Draw(*m_VAO, *m_IBO, *m_Shader);
+            // 准备一个 buffer 接数据
+            float* pixels = new float[1024 * 1024 * 4];
+            
+            // 从显存把纹理读回来 (这一步非常暴力，会卡顿，但为了调试值得)
+            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixels);
+            
+            // 检查中心点像素 (512, 512)
+            int index = (512 * 1024 + 512) * 4;
+            float r = pixels[index + 0];
+            float g = pixels[index + 1];
+            float b = pixels[index + 2];
+            float a = pixels[index + 3];
+            
+            // 打印颜色值 (只打印一次，防止刷屏)
+            static bool s_Logged = false;
+            if (!s_Logged) {
+                std::cout << ">>> GPU Texture Center Pixel: (" 
+                        << r << ", " << g << ", " << b << ", " << a << ")" << std::endl;
+                s_Logged = true;
+            }
+
+            delete[] pixels;
         }
 
-        // 3. 绘制物体 B (响应 ImGui m_TranslationB)
+        // ====================================================
+        // 阶段二：显示 (Graphic Shader)
+        // ====================================================
         {
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), m_TranslationB);
-            glm::mat4 mvp = m_Proj * m_View * model; 
-            m_Shader->SetUniformMat4f("u_MVP", mvp);
-            renderer.Draw(*m_VAO, *m_IBO, *m_Shader);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            Renderer renderer;
+            // 【重点修复】必须先绑定图形 Shader，后续的 SetUniform 才有效！
+            m_Shader->Bind();
+
+            // 1. 绑定纹理
+            m_ImageTextureOut->Bind(0);            // 绑定到 0 号槽
+            m_Shader->SetUniform1i("u_Texture", 0); // 告诉 Shader 读 0 号槽
+
+            // 2. 绘制物体 A (响应 ImGui m_TranslationA)
+            {
+                glm::mat4 model = glm::translate(glm::mat4(1.0f), m_TranslationA);
+                model = glm::scale(model, glm::vec3(4.0f,3.0f,1.0f)); // 放大两倍，覆盖更多像素，方便观察
+                glm::mat4 mvp = m_Proj * m_View * model; 
+                
+                // 因为上面已经调用了 m_Shader->Bind()，这里设置矩阵才会生效
+                m_Shader->SetUniformMat4f("u_MVP", mvp);
+                
+                // Draw 内部通常会再次 Bind Shader，这也是安全的
+                renderer.Draw(*m_VAO, *m_IBO, *m_Shader);
+            }
+            std::swap(m_ImageTextureIn, m_ImageTextureOut); // 交换输入输出纹理，下一帧继续计算
         }
-    }
+
     }
     void ImageTexture2D::OnImGuiRender(){
         static int counter = 0;
 
         ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-        ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+        ImGui::Text("This is some useful text.");
+    // 【在这里放置按钮】
+        if (ImGui::Button("Clear Waves")) {
+            s_ShouldClearWaves = true; // 发送清空信号
+        }               
+        // Display some text (you can use a format strings too)
         ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
         ImGui::Checkbox("Another Window", &show_another_window);
 		// ImGui::SliderFloat() 函数创建了一个滑动条控件，允许用户调整一个浮点数值。参数含义如下：
         ImGui::SliderFloat("Move X", &m_TranslationA.x, -2.0f, 2.0f);
 		ImGui::SliderFloat("Move Y", &m_TranslationA.y, -1.5f, 1.5f);
 		ImGui::SliderFloat("Move Z", &m_TranslationA.z, -1.0f, 1.0f);
-		ImGui::SliderFloat("MoveB X", &m_TranslationB.x, -2.0f, 2.0f);
-		ImGui::SliderFloat("MoveB Y", &m_TranslationB.y, -1.5f, 1.5f);
-		ImGui::SliderFloat("MoveB Z", &m_TranslationB.z, -1.0f, 1.0f); 
 		// Edit 1 float using a slider from 0.0f to 1.0f
         if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
             counter++;

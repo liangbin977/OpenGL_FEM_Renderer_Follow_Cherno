@@ -27,7 +27,13 @@ void Shader::SetUniformMat4f(const std::string& name, const glm::mat4& matrix){
 void Shader::SetUniform1f(const std::string& name, float value){
 	GLCall(glUniform1f(GetUniformLocation(name), value));
 }
-
+void Shader::SetUniform2f(const std::string& name, float v0, float v1){
+	GLCall(glUniform2f(GetUniformLocation(name), v0, v1));
+}
+//GLSL 中没有 bool 类型的 Uniform，通常我们会用 int 来代替，0 表示 false，非 0 表示 true。
+void Shader::SetUniformBool(const std::string& name, bool value){
+	GLCall(glUniform1i(GetUniformLocation(name), (int)value));
+}
 void Shader::Bind()const{
     GLCall(glUseProgram(m_RendererID));
 };

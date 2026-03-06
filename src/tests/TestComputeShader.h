@@ -15,7 +15,7 @@ namespace test {
             void OnRender() override;
             void OnImGuiRender() override;
         private:
-            glm::vec3 m_TranslationA, m_TranslationB;
+            glm::vec3 m_TranslationA;
             bool show_demo_window = true;
             bool show_another_window = false;
 
@@ -27,6 +27,7 @@ namespace test {
             std::unique_ptr<VertexBufferLayout> m_Layout;
             std::unique_ptr<Shader> m_Shader;
             std::unique_ptr<Shader> m_ComputeShader;
-            std::unique_ptr<ImageTexture> m_ImageTexture;
+            std::unique_ptr<ImageTexture> m_ImageTextureIn;
+            std::unique_ptr<ImageTexture> m_ImageTextureOut;
     };
 };
