@@ -56,7 +56,7 @@ int main(void){
     // 必须在 glfwInit() 之后，glfwCreateWindow 之前
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); // 必须是 4
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3); // 必须是 3 或更高 (4.3 / 4.5 / 4.6)
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // 使用核心模式（Core Profile），不使用兼容模式（Compatibility Profile）。核心模式剔除了过时的功能，强制使用现代 OpenGL 编程方式。
     // 2. 创建窗口
     // 参数含义：宽度(640), 高度(480), 标题("Hello World"), 显示器(NULL表示窗口模式), 共享上下文(NULL表示不共享)
     window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
@@ -323,4 +323,120 @@ while(!glfwWindowShouldClose(window)){
 
 
 
+//下面是逻辑最清晰的main代码
+// #include <glad/glad.h>
+// #include <GLFW/glfw3.h>
+// #include <iostream>
+// #include <cmath>
 
+// int main(void){
+//     if(!glfwInit()){
+//         return -1;
+//     }
+//     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+//     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+//     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+//     GLFWwindow* window = glfwCreateWindow(640,480,"liangbin", NULL, NULL);
+//     if(!window){
+//         glfwTerminate();
+//         return -1;
+//     }
+//     glfwMakeContextCurrent(window);
+//     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
+//         return -1;
+//     }
+
+//     const char* vertexShaderSource = R"(
+//         #version 430 core
+//         layout(location = 0) in vec3 position;
+//         void main(){
+//             gl_Position = position;
+//         }
+//     )";
+//     const char* fragmentShaderSource = R"(
+//         #version 430 core
+//         out vec4 color;
+//         void main(){
+//             color = vec4(1.0, 0.5, 0.2, 1.0);
+//         }
+//     )";
+
+//     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+//     glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
+//     glCompileShader(vertexShader);
+
+//     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+//     glShaderSource(fragmentShader,1, &fragmentShaderSource, nullptr);
+//     glCompileShader(fragmentShader);
+
+//     GLuint shaderProgram = glCreateProgram();
+//     glAttachShader(shaderProgram, vertexShader);
+//     glAttachShader(shaderProgram, fragmentShader);
+//     glLinkProgram(shaderProgram);
+
+//     glDeleteShader(vertexShader);
+//     glDeleteShader(fragmentShader);
+
+
+//     GLfloat vertices[] =
+//     {
+//         -0.5f,   -0.5f * float(sqrt(3)) / 3, 0.0f, // Lower left corner
+//         0.5f,   -0.5f * float(sqrt(3)) / 3, 0.0f, // Lower right corner
+//         0.0f,    0.5f * float(sqrt(3)) * 2 / 3, 0.0f, // Upper corner
+//         -0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f, // Inner left
+//         0.5f / 2, 0.5f * float(sqrt(3)) / 6, 0.0f, // Inner right
+//         0.0f,   -0.5f * float(sqrt(3)) / 3, 0.0f  // Inner down
+//     };
+
+//     GLuint indices[] =
+//     {
+//         0, 3, 5, // Lower left triangle
+//         3, 2, 4, // Lower right triangle
+//         5, 4, 1
+//     };
+
+//     GLuint VBO, VAO, EBO;
+//     glGenVertexArrays(1, &VAO);
+//     glGenBuffers(1, &VBO);
+//     glGenBuffers(1, &EBO);
+
+//     //VAO会自动记录VBO和EBO的绑定状态，所以我们先绑定VAO，再绑定VBO和EBO。
+//     glBindVertexArray(VAO);
+//     //切换到 VBO 的绑定点，上传顶点数据
+//     glBindBuffer(GL_ARRAY_BUFFER, VBO);
+//     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+//     //切换到 EBO 的绑定点，上传索引数据
+//     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+//     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+//     //配置VAO的顶点属性指针，告诉OpenGL如何解释VBO里的数据
+//     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);
+//     //在shader中启用位置属性（location = 0）按照上面配置的方式从VBO里读取数据
+//     glEnableVertexAttribArray(0);
+    
+//     //解绑VAO和VBO，注意解绑顺序，先解绑VAO，再解绑VBO和EBO。
+//     glBindBuffer(GL_ARRAY_BUFFER, 0);
+//     glBindVertexArray(0);
+//     //放到解绑VAO后面，因为 EBO 是 VAO 的一部分，解绑 VAO 也会解绑 EBO。
+//     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+
+//     while(!glfwWindowShouldClose(window)){
+//         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+//         glClear(GL_COLOR_BUFFER_BIT);
+
+//         glUseProgram(shaderProgram);
+//         //假如有多个 VAO，切换到对应的 VAO 就会自动切换到对应的 VBO 和 EBO 了。
+//         glBindVertexArray(VAO);
+//         glDrawElements(GL_TRIANGLES, 9, GL_UNSIGNED_INT, 0);
+
+//         glfwSwapBuffers(window);
+//         //glfwPollEvents() 函数会处理所有的输入事件（键盘、鼠标等），并调用相应的回调函数。它还会更新窗口状态，比如窗口大小变化、焦点变化等。这个函数必须在渲染循环中被调用，否则你的程序将无法响应用户输入。
+//         glfwPollEvents();
+//     }
+//     glDeleteBuffers(1, &VBO);
+//     glDeleteBuffers(1, &EBO);
+//     glDeleteVertexArrays(1, &VAO);
+//     glDeleteProgram(shaderProgram);
+
+//     glfwTerminate();
+// }
